@@ -1,53 +1,90 @@
 import streamlit as st
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 import joblib
 import numpy as np
 
-# 1. Kaydedilen Modelleri Yükle
-model = joblib.load('models/best_model.pkl')
-scaler = joblib.load('models/scaler.pkl')
+# 1. Ayarlar ve Veri Yükleme
+st.set_page_config(page_title="Kalp Sağlığı Analizörü", layout="wide")
 
-# 2. Sayfa Ayarları ve Başlık
-st.set_page_config(page_title="Kalp Hastalığı Risk Analizi", layout="centered")
-st.title("🩺 Kalp Hastalığı Risk Tahmin Sistemi")
-st.write("Lütfen aşağıdaki sağlık verilerini girerek analiz butonuna basınız.")
+# Hata yönetimi ile model yükleme
+try:
+    df = pd.read_csv('data/heart.csv')
+    model = joblib.load('models/best_model.pkl')
+    scaler = joblib.load('models/scaler.pkl')
+except Exception as e:
+    st.error("Model veya veri dosyaları bulunamadı. Lütfen 'models/' ve 'data/' klasörlerini kontrol edin.")
 
-# 3. Kullanıcı Giriş Alanları (Sidebar veya Ana Sayfa)
-col1, col2 = st.columns(2)
+# Yan Menü Tasarımı
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/822/822118.png", width=100)
+st.sidebar.title("Kontrol Paneli")
+page = st.sidebar.selectbox("Sayfa Seçiniz:", ["Canlı Tahmin", "Model Analizi & Karar Yapısı"])
 
-with col1:
-    age = st.number_input("Yaş", min_value=1, max_value=120, value=40)
-    sex = st.selectbox("Cinsiyet", options=[0, 1], format_func=lambda x: "Erkek" if x == 1 else "Kadın")
-    cp = st.slider("Göğüs Ağrısı Tipi (0-3)", 0, 3, 1)
-    trestbps = st.number_input("Dinlenme Tansiyonu", 80, 200, 120)
-    chol = st.number_input("Kolesterol", 100, 600, 200)
-    fbs = st.selectbox("Açlık Kan Şekeri > 120 mg/dl?", options=[0, 1], format_func=lambda x: "Evet" if x == 1 else "Hayır")
+# --- SAYFA 1: CANLI TAHMİN ---
+if page == "Canlı Tahmin":
+    st.title("🩺 Akıllı Kalp Hastalığı Risk Tahmini")
+    st.info("Lütfen hastanın klinik verilerini girerek 'Analiz Et' butonuna basınız.")
 
-with col2:
-    restecg = st.slider("EKG Sonucu (0-2)", 0, 2, 0)
-    thalach = st.number_input("Maksimum Kalp Atış Hızı", 60, 220, 150)
-    exang = st.selectbox("Egzersize Bağlı Göğüs Ağrısı?", options=[0, 1], format_func=lambda x: "Evet" if x == 1 else "Hayır")
-    oldpeak = st.number_input("ST Depresyonu (oldpeak)", 0.0, 6.0, 0.0, step=0.1)
-    slope = st.slider("ST Eğimi (0-2)", 0, 2, 1)
-    ca = st.slider("Renkli Damar Sayısı (0-4)", 0, 4, 0)
-    thal = st.slider("Thalassemia (1-3)", 1, 3, 2)
+    with st.container():
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            age = st.number_input("Yaş", 1, 100, 45)
+            trestbps = st.number_input("Dinlenme Tansiyonu", 80, 200, 120)
+            chol = st.number_input("Kolesterol", 100, 500, 200)
+            fbs = st.selectbox("Açlık Kan Şekeri > 120 mg/dl?", [0, 1], format_func=lambda x: "Evet" if x==1 else "Hayır")
+            
+        with col2:
+            sex = st.selectbox("Cinsiyet", [1, 0], format_func=lambda x: "Erkek" if x==1 else "Kadın")
+            thalach = st.number_input("Maks. Kalp Hızı", 60, 220, 150)
+            oldpeak = st.slider("ST Depresyonu (oldpeak)", 0.0, 6.0, 0.0)
+            exang = st.selectbox("Egzersize Bağlı Anjin?", [0, 1], format_func=lambda x: "Evet" if x==1 else "Hayır")
+            
+        with col3:
+            cp = st.selectbox("Göğüs Ağrısı Tipi (0-3)", [0, 1, 2, 3])
+            ca = st.selectbox("Damar Sayısı (0-4)", [0, 1, 2, 3, 4])
+            thal = st.selectbox("Thalassemia (1-3)", [1, 2, 3])
+            slope = st.selectbox("ST Eğimi (0-2)", [0, 1, 2])
+            restecg = st.selectbox("EKG Sonucu (0-2)", [0, 1, 2])
 
-# 4. Tahmin Butonu ve Sonuç Ekranı
-if st.button("ANALİZ ET"):
-    # Veriyi hazırla
-    input_data = np.array([[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]])
-    input_scaled = scaler.transform(input_data)
-    
-    # Tahmin
-    prediction = model.predict(input_scaled)
-    probability = model.predict_proba(input_scaled)
-    
-    st.divider()
-    
-    if prediction[0] == 1:
-        st.error(f"### ⚠️ RİSK TESPİT EDİLDİ!")
-        st.write(f"Modelin tahmin güveni: **%{probability[0][1]*100:.2f}**")
-    else:
-        st.success(f"###  DÜŞÜK RİSK")
-        st.write(f"Modelin sağlık tahmini güveni: **%{probability[0][0]*100:.2f}**")
+    if st.button("Hemen Analiz Et"):
+        # Veri hazırlama: Modelin beklediği 13 özelliği tam ve doğru sırayla veriyoruz
+        input_data = np.array([[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]])
+        input_scaled = scaler.transform(input_data)
         
-    st.info("Not: Bu sonuçlar sadece bir makine öğrenmesi modelinin tahmini olup tıbbi tavsiye niteliği taşımaz.")
+        # Tahmin ve Olasılık
+        prob = model.predict_proba(input_scaled)[0]
+        
+        st.divider()
+        
+        if prob[1] > 0.5:
+            st.error(f"### ⚠️ Yüksek Risk: %{prob[1]*100:.1f}")
+            st.progress(prob[1])
+        else:
+            st.success(f"### ✅ Düşük Risk: %{prob[0]*100:.1f}")
+            st.progress(prob[1])
+        
+        # Uyarı mesajı butona basıldığında sonuçların hemen altında çıkar
+        st.warning(
+            "**Yasal Uyarı:** Bu sonuç yalnızca bir makine öğrenmesi modeline dayalı tahmindir. "
+            "Tıbbi bir teşhis değildir. Kesin değerlendirme için lütfen bir uzmana başvurunuz."
+        )
+
+# --- SAYFA 2: MODEL ANALİZİ ---
+elif page == "Model Analizi & Karar Yapısı":
+    st.title("Yapay Zeka Nasıl Karar Veriyor?")
+    
+    st.subheader("Özelliklerin Önem Sıralaması")
+    st.write("Modelimiz tahmin yaparken hangi verilere daha çok önem veriyor?")
+
+    # Özellik önemlerini hesapla
+    importances = model.feature_importances_
+    feature_names = df.drop('target', axis=1).columns
+    feature_importance_df = pd.DataFrame({'Özellik': feature_names, 'Önem': importances}).sort_values(by='Önem', ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x='Önem', y='Özellik', data=feature_importance_df, palette='magma', ax=ax)
+    plt.title("Model Karar Faktörleri")
+    st.pyplot(fig)
+
+    st.write("> **Analiz:** Grafikte en üstte yer alan özellikler, kalp hastalığı tahmininde modelin en çok güvendiği parametrelerdir.")
