@@ -48,15 +48,29 @@ if page == "Canlı Tahmin":
             restecg = st.selectbox("EKG Sonucu (0-2)", [0, 1, 2])
 
     if st.button("Hemen Analiz Et"):
-        # Veri hazırlama: Modelin beklediği 13 özelliği tam ve doğru sırayla veriyoruz
-        input_data = np.array([[age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal]])
-        input_scaled = scaler.transform(input_data)
+        # 1. Ham veriyi DataFrame olarak oluştur (Sütun isimleri heart.csv ile aynı olmalı)
+        input_df = pd.DataFrame([{
+            'age': age, 'sex': sex, 'cp': cp, 'trestbps': trestbps, 'chol': chol,
+            'fbs': fbs, 'restecg': restecg, 'thalach': thalach, 'exang': exang,
+            'oldpeak': oldpeak, 'slope': slope, 'ca': ca, 'thal': thal
+        }])
         
-        # Tahmin ve Olasılık
+        # 2. ÖNEMLİ: Sadece ham veriyi ölçeklendiriyoruz
+        # Streamlit arayüzünden gelen (Yaş: 45 vb.) veriler için bu adım şarttır.
+        # Bu işlem veriyi '2026-05-01T10-38_export.csv' dosyasındaki formata getirir.
+        input_scaled = scaler.transform(input_df)
+        
+        # 3. Tahmin yapıyoruz
+        # prob[0] -> Sağlıklı olma ihtimali, prob[1] -> Hasta olma ihtimali
         prob = model.predict_proba(input_scaled)[0]
         
-        st.divider()
+        # --- Hata Ayıklama Paneli (Sadece kontrol için) ---
+        with st.expander("Teknik Detayları Gör"):
+            st.write("Arayüzden Gelen Ham Veri:", input_df)
+            st.write("Modele Giren Son Hali (Ölçeklenmiş):", input_scaled)
         
+        # 4. Sonuçları ekrana basıyoruz
+        st.divider()
         if prob[1] > 0.5:
             st.error(f"### ⚠️ Yüksek Risk: %{prob[1]*100:.1f}")
             st.progress(prob[1])
@@ -64,7 +78,7 @@ if page == "Canlı Tahmin":
             st.success(f"### ✅ Düşük Risk: %{prob[0]*100:.1f}")
             st.progress(prob[1])
         
-        # Uyarı mesajı butona basıldığında sonuçların hemen altında çıkar
+        # Uyarı mesajı
         st.warning(
             "**Yasal Uyarı:** Bu sonuç yalnızca bir makine öğrenmesi modeline dayalı tahmindir. "
             "Tıbbi bir teşhis değildir. Kesin değerlendirme için lütfen bir uzmana başvurunuz."
